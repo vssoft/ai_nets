@@ -1,4 +1,5 @@
 # import os
+import sys
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -24,8 +25,10 @@ lr = 1e-3
 threshold = 0.5
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Using device:", device)
 
+print("\nSTART JOB using device:", device)
+
+# sys.exit()  # This will terminate the script here
 
 # =========================
 # 2) LOAD IMAGES + MASKS
@@ -64,7 +67,7 @@ X = np.expand_dims(X, axis=1)
 y = np.expand_dims(y, axis=1)
 
 print(f"X shape: {X.shape} | y shape: {y.shape}")
-
+sys.exit()  # This will terminate the script here
 # Split data (same as your code)
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.1, random_state=42)
 
