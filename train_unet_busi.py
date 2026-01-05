@@ -1,4 +1,5 @@
 # train_unet_busi.py
+# BUSI (Breast Ultrasound Images) Dataset segmentation training script.
 
 import os
 import random
