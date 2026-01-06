@@ -1,3 +1,57 @@
+# inspect_busi_predictions_gui.py
+"""
+GUI-based viewer to inspect BUSI dataset segmentation predictions using matplotlib.
+Allows navigation through samples, displaying input image, ground truth,
+predicted mask, and overlay. Also shows Dice, IoU, Precision, and Recall metrics:
+- Input | Ground Truth | Predicted Mask | Overlay
+- Buttons: Previous, Next, Random, Exit
+- TextBox to jump to specific index
+- Keyboard shortcuts for navigation
+
+Dice and IoU are overlap scores. 
+They tell you how well your predicted mask matches the ground-truth mask 
+(the human-drawn correct answer) for each image.
+Think of each mask as a set of pixels marked “tumor”. 
+The model predicts a set of pixels, and the ground truth is the correct set. 
+Dice and IoU measure how much these two sets overlap.
+
+Dice = (2 * |P ∩ G|) / (|P| + |G|)
+IoU  = |P ∩ G| / |P ∪ G|
+Where P = Ppredicted tumor pixels, G = Ground-truth tumor pixels.
+
+Dice is very useful for medical segmentation because it does not get fooled by large background areas. 
+Even if 95% of the image is background, Dice focuses only on the overlap between the tumor regions.
+
+Dice = 1.0 → perfect segmentation (prediction exactly matches ground truth)
+Dice = 0.0 → no overlap at all
+Dice = 0.5 → moderate overlap
+
+IoU (Intersection over Union) is similar to Dice but penalizes false positives more.
+IoU = 1.0 → perfect segmentation
+IoU = 0.0 → no overlap at all
+IoU = 0.33 → moderate overlap
+
+Precision and Recall are classification metrics adapted for segmentation masks:
+- Precision = TP / (TP + FP)
+- Recall    = TP / (TP + FN)
+Where:
+TP = True Positives (correctly predicted tumor pixels)
+FP = False Positives (incorrectly predicted tumor pixels)
+FN = False Negatives (missed tumor pixels)
+
+Precision measures how many of the predicted tumor pixels were actually correct.
+Recall measures how many of the actual tumor pixels were correctly identified by the model.
+They range from 0.0 to 1.0:
+- Precision = 1.0 → all predicted tumor pixels are correct
+- Recall    = 1.0 → all actual tumor pixels were found
+
+Pattern	                        Meaning	                                        Typical fix
+Precision high, Recall low	    Model is conservative (misses tumor)	        lower threshold, increase Dice weight
+Precision low, Recall high	    Model over-segments (too many false positives)	increase BCE weight, raise threshold
+Both low	                    Bad segmentation overall	                    train longer, better augmentation, higher resolution
+
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, TextBox
@@ -61,7 +115,25 @@ def dice_iou(pred_bin, gt_bin, eps=1e-7):
     return float(dice), float(iou)
 
 
+def precision_recall(pred_bin, gt_bin, eps=1e-7):
+    """Compute precision and recall for one image.
+    pred_bin, gt_bin: binary masks (0/1) of shape [H,W]"""
+    pred = pred_bin.astype(np.uint8)
+    gt = gt_bin.astype(np.uint8)
+
+    tp = (pred & gt).sum()             # true positives
+    fp = (pred & (1 - gt)).sum()       # false positives
+    fn = ((1 - pred) & gt).sum()       # false negatives
+
+    precision = (tp + eps) / (tp + fp + eps)
+    recall    = (tp + eps) / (tp + fn + eps)
+
+    return float(precision), float(recall)
+
+
 class Viewer:
+    """GUI viewer for BUSI predictions."""
+    # ---- Constructor called automatically on creating the object with Viewer()
     def __init__(self):
         self.idx = 1
         self.max_idx = len(X) - 1
@@ -111,14 +183,18 @@ class Viewer:
         """Update display for current index."""
         idx = self.idx
 
+        # Get data: image and ground truth
         x_img = X[idx, 0]
         gt = y[idx, 0]
 
+        # Predict mask
         prob = predict_prob(idx)
         pred_bin = (prob > THRESHOLD).astype(np.uint8)
         gt_bin = (gt > 0.5).astype(np.uint8)
 
+        # Compute metrics
         dice, iou = dice_iou(pred_bin, gt_bin)
+        prec, rec = precision_recall(pred_bin, gt_bin)
 
         # Clear all axes and enable coordinate axes
         for a in self.ax:
@@ -129,6 +205,8 @@ class Viewer:
             # a.grid(True, linewidth=0.3)
             a.set_xticks(range(0, IMG_SIZE, 20))
             a.set_yticks(range(0, IMG_SIZE, 20))
+
+        # ---- Draw image panels ----
 
         # Input
         self.ax[0].imshow(x_img, cmap="gray")
@@ -162,14 +240,16 @@ class Viewer:
 
         # Update info text
         self.info_text.set_text(
-            f"Index: {idx}/{self.max_idx} | Dice: {dice:.4f} | IoU: {iou:.4f}\n"
-            "Keys: Right/D=Next | Left/A=Prev | R=Random | Enter in textbox=Jump"
+            f"Index: {idx}/{self.max_idx} | Dice: {dice:.4f} | IoU: {iou:.4f} | "
+            f"Precision: {prec:.4f} | Recall: {rec:.4f}\n"
+            "Keys: Right/D=Next | Left/A=Prev | R=Random | Enter in textbox=Jump | Q/Esc=Exit"
         )
 
-        # Redraw
+        # Redraw canvas
         self.fig.canvas.draw_idle()
         self.fig.canvas.flush_events()
 
+    # ---- Event handlers ----
     def next(self, event=None):
         """Next sample."""
         self.idx += 1
