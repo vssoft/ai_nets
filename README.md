@@ -2,6 +2,8 @@
 
 This project utilizes deep learning techniques to detect breast cancer in women by analyzing ultrasound images. The goal is to classify the images into two categories: benign (non-cancerous) and malignant (cancerous).
 
+## Note: Presently this project is Work-in-progress.
+
 ## Dataset
 
 The dataset used for training and testing the deep learning model is sourced from [Kaggle](https://www.kaggle.com/datasets/aryashah2k/breast-ultrasound-images-dataset/data). It contains a total of 3 folders containing images from which 891 are 'benign', 421 are 'malignant' and 266 are 'normal'. The images are two types: containing original photos and contaiung the photo's manually made ground-truth masks. The images are in PNG format and are of various sizes.
